@@ -31,12 +31,12 @@ def format_items_for_prompt(items: list[dict]) -> str:
     for item in items:
         tax = item.get("taxonomy", {})
         tax_str = f"{tax.get('l0', '')}/{tax.get('l1', '')}/{tax.get('l2', '')}"
-        line = f"[{item['item_id']}] {item['name']} | {item['category_name']} | {item['description']} | {tax_str} | R${item.get('price', 0):.2f}"
+        line = f"[{item['item_id']}] {item['name']} | {item['category_name']} | {item['description']} | {tax_str}"
         lines.append(line)
     return "\n".join(lines)
 
 
-def build_round1_prompt(query: str, items_text: str, top_n: int = 15) -> str:
+def build_round1_prompt(query: str, items_text: str, top_n: int = 10) -> str:
     return f"""You are evaluating search relevance for a food delivery app (iFood, Brazil).
 
 Query: "{query}"
@@ -235,6 +235,9 @@ def build_ground_truth(items: list[dict], queries: list[dict]) -> dict:
         print(f"  Round 1: {len(candidate_ids)} candidates")
 
         # Get full item dicts for candidates
+        missing = [cid for cid in candidate_ids if cid not in item_lookup]
+        if missing:
+            print(f"  WARNING: {len(missing)} candidate IDs not found in item lookup: {missing}")
         candidate_items = [item_lookup[cid] for cid in candidate_ids if cid in item_lookup]
 
         if not candidate_items:
