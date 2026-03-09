@@ -16,3 +16,5 @@ eval_data/
 key.md
 .env
 .ipynb_checkpoints/
+CLAUDE.md
+.claude/
