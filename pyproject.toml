@@ -1,0 +1,19 @@
+[project]
+name = "prosus-assignment"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.4.3",
+    "openai>=2.26.0",
+    "pandas>=3.0.1",
+    "rank-bm25>=0.2.2",
+    "scikit-learn>=1.8.0",
+    "tqdm>=4.67.3",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]
