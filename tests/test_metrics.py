@@ -1,6 +1,9 @@
 import pytest
 import math
-from src.eval.metrics import ndcg_at_k, mrr, precision_at_k, ncvr_at_k, penalized_ndcg_at_k
+from src.eval.metrics import (
+    ndcg_at_k, mrr, precision_at_k, ncvr_at_k, penalized_ndcg_at_k,
+    recall_at_k, f1_at_k,
+)
 
 
 def test_ndcg_perfect_ranking():
@@ -72,3 +75,55 @@ def test_penalized_ndcg_with_violations():
     penalized = penalized_ndcg_at_k(relevances, violations, k=4, penalty=-3)
     regular = ndcg_at_k(relevances, k=4)
     assert penalized < regular
+
+
+# --- recall_at_k tests ---
+
+def test_recall_at_k_all_retrieved():
+    # Retrieved 3 relevant out of 3 total relevant
+    relevances = [3, 2, 1, 0, 0]
+    assert recall_at_k(relevances, k=5, total_relevant=3) == pytest.approx(1.0)
+
+
+def test_recall_at_k_partial():
+    # Retrieved 2 relevant in top-3, but 5 relevant exist in corpus
+    relevances = [3, 0, 2, 0, 1]
+    assert recall_at_k(relevances, k=3, total_relevant=5) == pytest.approx(2 / 5)
+
+
+def test_recall_at_k_none_relevant():
+    relevances = [0, 0, 0]
+    assert recall_at_k(relevances, k=3, total_relevant=4) == 0.0
+
+
+def test_recall_at_k_zero_total():
+    # No relevant items in corpus — edge case
+    relevances = [0, 0]
+    assert recall_at_k(relevances, k=2, total_relevant=0) == 0.0
+
+
+# --- f1_at_k tests ---
+
+def test_f1_at_k_perfect():
+    # top-3 has 3 relevant, and there are exactly 3 relevant in corpus
+    # P@3 = 1.0, R@3 = 1.0, F1 = 1.0
+    relevances = [3, 2, 1]
+    assert f1_at_k(relevances, k=3, total_relevant=3) == pytest.approx(1.0)
+
+
+def test_f1_at_k_balanced():
+    # top-4: [rel, irr, rel, irr] → P@4 = 0.5
+    # total_relevant=4 → R@4 = 2/4 = 0.5
+    # F1 = 2 * 0.5 * 0.5 / (0.5 + 0.5) = 0.5
+    relevances = [1, 0, 1, 0]
+    assert f1_at_k(relevances, k=4, total_relevant=4) == pytest.approx(0.5)
+
+
+def test_f1_at_k_zero_precision_and_recall():
+    relevances = [0, 0, 0]
+    assert f1_at_k(relevances, k=3, total_relevant=5) == 0.0
+
+
+def test_f1_at_k_zero_total_relevant():
+    relevances = [0, 0]
+    assert f1_at_k(relevances, k=2, total_relevant=0) == 0.0

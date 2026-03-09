@@ -56,3 +56,20 @@ def penalized_ndcg_at_k(
         for r, v in zip(relevances, violations)
     ]
     return ndcg_at_k(adjusted, k)
+
+
+def recall_at_k(relevances: list[float], k: int, total_relevant: int) -> float:
+    """Recall at k. Fraction of all relevant items in corpus that appear in top-k."""
+    if total_relevant == 0:
+        return 0.0
+    top_k = relevances[:k]
+    return sum(1 for r in top_k if r > 0) / total_relevant
+
+
+def f1_at_k(relevances: list[float], k: int, total_relevant: int) -> float:
+    """F1 at k. Harmonic mean of precision@k and recall@k."""
+    p = precision_at_k(relevances, k)
+    r = recall_at_k(relevances, k, total_relevant)
+    if p + r == 0:
+        return 0.0
+    return 2 * p * r / (p + r)
