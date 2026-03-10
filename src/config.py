@@ -4,7 +4,7 @@ PROXY_URL = "https://oovault.nl/api/proxy/v1"
 PROXY_KEY = os.environ.get("PROXY_KEY", "")
 
 EMBEDDING_MODEL = "text-embedding-3-small"
-LLM_MODEL = "gpt-4o-mini"
+LLM_MODEL = "gpt-5-mini"
 
 DATA_DIR = "data"
 EVAL_DIR = "eval_data"

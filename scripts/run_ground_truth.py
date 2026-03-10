@@ -3,6 +3,8 @@ import os
 import random
 import sys
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
 # Ensure PROXY_KEY is set
 if not os.environ.get("PROXY_KEY"):
     key_path = os.path.join(os.path.dirname(__file__), "..", "key.md")
@@ -11,7 +13,7 @@ if not os.environ.get("PROXY_KEY"):
         with open(key_path) as f:
             for line in f:
                 if line.startswith("PROXY_KEY"):
-                    os.environ["PROXY_KEY"] = line.split('"')[1]
+                    os.environ["OPENAI_API_KEY"] = line.split('"')[1]
                     break
 
 from src.data_loader import load_items, load_queries
@@ -22,6 +24,7 @@ def main():
     print("Loading data...")
     items = load_items()
     queries = load_queries()
+    random.seed(42)
     random.shuffle(items)
     random.shuffle(queries)
     print(f"Loaded {len(items)} items, {len(queries)} queries (shuffled)")
