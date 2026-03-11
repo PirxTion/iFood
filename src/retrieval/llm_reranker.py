@@ -2,10 +2,30 @@
 import json
 import os
 import re
+from abc import ABC, abstractmethod
 
+from huggingface_hub import InferenceClient
 from openai import OpenAI
 
-from src.config import PROXY_URL, PROXY_KEY, LLM_MODEL, RERANK_TOP_N, FINAL_TOP_K
+from src.config import PROXY_URL, PROXY_KEY, LLM_MODEL, RERANK_TOP_N, FINAL_TOP_K, HF_TOKEN, HF_RERANKER_MODEL
+
+
+class Reranker(ABC):
+    """Abstract base class for all rerankers."""
+
+    def __init__(self, items: list[dict]):
+        self.item_lookup = {item["item_id"]: item for item in items}
+
+    def _item_text(self, item: dict) -> str:
+        """Compact text representation of an item (no ID prefix)."""
+        tax = item.get("taxonomy", {})
+        tax_str = f"{tax.get('l0', '')}/{tax.get('l1', '')}/{tax.get('l2', '')}"
+        return f"{item['name']} | {item['category_name']} | {item['description']} | {tax_str}"
+
+    @abstractmethod
+    def rerank(self, query: str, candidate_ids: list[str], top_k: int = FINAL_TOP_K) -> list[str]:
+        """Return top_k candidate IDs sorted by relevance to query."""
+        ...
 
 
 def get_client() -> OpenAI:
@@ -20,7 +40,7 @@ Query: "{query}"
 
 Re-rank these items by relevance to the query. Return the top {top_k} item IDs as a JSON array, most relevant first.
 
-IMPORTANT: If the query contains negation (e.g., "sem peixe" = without fish), items containing the negated ingredient must be ranked LAST or excluded entirely.
+IMPORTANT: If the query contains negation (e.g., "sem peixe" = without fish), items containing the negated ingredient must be excluded entirely.
 
 Items:
 {items_text}
@@ -63,11 +83,58 @@ def parse_rerank_response(response: str) -> list[str]:
     return []
 
 
-class LLMReranker:
+class HFReranker(Reranker):
+    """Cross-encoder reranker using HuggingFace Inference API.
+
+    Scores each (query, candidate) pair with BAAI/bge-reranker-v2-m3
+    and returns candidates sorted by relevance score.
+    """
+
+    def __init__(self, items: list[dict], model: str = HF_RERANKER_MODEL):
+        super().__init__(items)
+        self.model = model
+        self.client = InferenceClient(
+            provider="hf-inference",
+            api_key=HF_TOKEN or os.environ.get("HF_TOKEN", ""),
+        )
+
+    def _score(self, query: str, doc: str) -> float:
+        """Score a single query-document pair. Returns relevance probability."""
+        result = self.client.text_classification(
+            {"text": query, "text_pair": doc},
+            model=self.model,
+        )
+        label_scores = {r.label: r.score for r in result}
+        # bge-reranker uses LABEL_1 as the positive (relevant) class
+        return label_scores.get("LABEL_1", max(r.score for r in result))
+
+    def rerank(
+        self,
+        query: str,
+        candidate_ids: list[str],
+        top_k: int = FINAL_TOP_K,
+    ) -> list[str]:
+        """Re-rank candidates by cross-encoder relevance score."""
+        scored = []
+        for cid in candidate_ids:
+            if cid not in self.item_lookup:
+                continue
+            doc = self._item_text(self.item_lookup[cid])
+            try:
+                score = self._score(query, doc)
+            except Exception as e:
+                print(f"HF reranker error for {cid}: {e}")
+                score = 0.0
+            scored.append((cid, score))
+
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return [cid for cid, _ in scored[:top_k]]
+
+
+class LLMReranker(Reranker):
     def __init__(self, items: list[dict]):
-        """Initialize with full item list for lookup."""
+        super().__init__(items)
         self.client = get_client()
-        self.item_lookup = {item["item_id"]: item for item in items}
 
     def rerank(
         self,
@@ -76,14 +143,9 @@ class LLMReranker:
         top_k: int = FINAL_TOP_K,
     ) -> list[str]:
         """Re-rank candidate items using LLM."""
-        # Build items text for candidates
         candidates = [self.item_lookup[cid] for cid in candidate_ids if cid in self.item_lookup]
-        lines = []
-        for item in candidates:
-            tax = item.get("taxonomy", {})
-            tax_str = f"{tax.get('l0', '')}/{tax.get('l1', '')}/{tax.get('l2', '')}"
-            line = f"[{item['item_id']}] {item['name']} | {item['category_name']} | {item['description']} | {tax_str}"
-            lines.append(line)
+        # LLM needs the ID prefix so it can reference items in its response
+        lines = [f"[{item['item_id']}] {self._item_text(item)}" for item in candidates]
         items_text = "\n".join(lines)
 
         prompt = build_rerank_prompt(query, items_text, top_k)
@@ -92,7 +154,7 @@ class LLMReranker:
             resp = self.client.chat.completions.create(
                 model=LLM_MODEL,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.0,
+                temperature=1.0,
             )
             reranked = parse_rerank_response(resp.choices[0].message.content or "")
             # Filter to only valid IDs and limit
