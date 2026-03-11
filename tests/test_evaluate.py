@@ -1,5 +1,6 @@
 import pytest
 from src.eval.evaluate import evaluate_retriever
+from src.eval.tracing import QueryTraceCollector
 
 
 def test_evaluate_retriever_returns_metrics():
@@ -23,3 +24,23 @@ def test_evaluate_retriever_returns_metrics():
     assert "precision@3" in results["overall"]
     assert "by_category" in results
     assert "keyword" in results["by_category"]
+
+
+def test_evaluate_retriever_with_collector():
+    ground_truth = {
+        "pizza": [
+            {"item_id": "a", "relevance": 3, "violation": False},
+            {"item_id": "b", "relevance": 2, "violation": False},
+        ]
+    }
+    queries = [{"query": "pizza", "category": "keyword"}]
+    collector = QueryTraceCollector()
+
+    def mock_pipeline(query_text, top_k):
+        collector.begin_query(query_text, "keyword")
+        collector.finalize_query(["a", "b"], 42.0)
+        return ["a", "b"]
+
+    results = evaluate_retriever(mock_pipeline, queries, ground_truth, k=2, collector=collector)
+    assert len(collector.traces) == 1
+    assert collector.traces[0].metrics.get("ndcg@2") is not None

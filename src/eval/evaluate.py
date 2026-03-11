@@ -7,6 +7,7 @@ def evaluate_retriever(
     queries: list[dict],
     ground_truth: dict,
     k: int = 10,
+    collector: "QueryTraceCollector | None" = None,
 ) -> dict:
     """Evaluate a retriever function against ground truth.
 
@@ -46,6 +47,9 @@ def evaluate_retriever(
         if category == "negative":
             metrics[f"ncvr@{k}"] = ncvr_at_k(violations, k)
             metrics[f"penalized_ndcg@{k}"] = penalized_ndcg_at_k(relevances, violations, k)
+
+        if collector is not None:
+            collector.set_query_metrics(query_text, metrics)
 
         all_metrics.append(metrics)
         by_category.setdefault(category, []).append(metrics)
