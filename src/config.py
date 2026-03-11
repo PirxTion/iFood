@@ -8,6 +8,7 @@ LLM_MODEL = "gpt-5-mini"
 
 DATA_DIR = "data"
 EVAL_DIR = "eval_data"
+EMBEDDING_CACHE_PATH = f"{EVAL_DIR}/embedding_cache.pkl"
 
 ITEMS_CSV = f"{DATA_DIR}/5k_items.csv"
 QUERIES_CSV = f"{DATA_DIR}/queries.csv"
