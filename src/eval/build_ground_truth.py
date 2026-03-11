@@ -299,22 +299,40 @@ def _poll_until_done(client: OpenAI, batch_id: str, poll_interval: int) -> Any:
         time.sleep(poll_interval)
 
 
-def submit_batch_and_wait(
+def _split_jsonl(jsonl_path: str, max_requests_per_chunk: int = 150) -> list[str]:
+    """Split a JSONL file into smaller chunk files.
+
+    Returns list of chunk file paths. If the file is small enough,
+    returns a single-element list with the original path.
+    """
+    with open(jsonl_path) as f:
+        lines = f.readlines()
+
+    if len(lines) <= max_requests_per_chunk:
+        return [jsonl_path]
+
+    base, ext = os.path.splitext(jsonl_path)
+    chunk_paths = []
+    for i in range(0, len(lines), max_requests_per_chunk):
+        chunk = lines[i:i + max_requests_per_chunk]
+        chunk_path = f"{base}_chunk{len(chunk_paths)}{ext}"
+        with open(chunk_path, "w") as f:
+            f.writelines(chunk)
+        chunk_paths.append(chunk_path)
+
+    print(f"  Split {len(lines)} requests into {len(chunk_paths)} chunks of ~{max_requests_per_chunk}")
+    return chunk_paths
+
+
+def _submit_single_batch(
     client: OpenAI,
     jsonl_path: str,
-    poll_interval: int = 30,
-    registry_path: str | None = None,
+    poll_interval: int,
+    registry: dict,
+    registry_path: str | None,
 ) -> list[dict]:
-    """Upload JSONL file, create batch, poll until complete, return results.
-
-    If registry_path is given, a JSON registry of {content_hash: batch_id} is
-    maintained there.  On each call the JSONL is hashed; if a matching batch
-    already exists on the API it is reused (completed → download immediately,
-    in-progress → resume polling, failed/expired → remove and resubmit).
-    Delete the registry file to force a completely fresh submission.
-    """
+    """Submit a single JSONL file as a batch, with registry-based caching."""
     content_hash = _hash_file(jsonl_path)
-    registry = _load_registry(registry_path) if registry_path else {}
 
     # --- Try to reuse an existing batch for this exact content ---
     if content_hash in registry:
@@ -366,6 +384,37 @@ def submit_batch_and_wait(
 
     print(f"  Downloading results from file: {batch.output_file_id}")
     return _download_batch_results(client, batch.output_file_id)
+
+
+def submit_batch_and_wait(
+    client: OpenAI,
+    jsonl_path: str,
+    poll_interval: int = 30,
+    registry_path: str | None = None,
+    max_requests_per_chunk: int = 150,
+) -> list[dict]:
+    """Upload JSONL file, create batch, poll until complete, return results.
+
+    Large files are automatically split into chunks of max_requests_per_chunk
+    requests and submitted sequentially to stay within API token limits.
+
+    If registry_path is given, a JSON registry of {content_hash: batch_id} is
+    maintained there.  On each call the JSONL is hashed; if a matching batch
+    already exists on the API it is reused (completed → download immediately,
+    in-progress → resume polling, failed/expired → remove and resubmit).
+    Delete the registry file to force a completely fresh submission.
+    """
+    chunk_paths = _split_jsonl(jsonl_path, max_requests_per_chunk)
+    registry = _load_registry(registry_path) if registry_path else {}
+
+    all_results = []
+    for i, chunk_path in enumerate(chunk_paths):
+        if len(chunk_paths) > 1:
+            print(f"  --- Chunk {i + 1}/{len(chunk_paths)} ---")
+        results = _submit_single_batch(client, chunk_path, poll_interval, registry, registry_path)
+        all_results.extend(results)
+
+    return all_results
 
 
 def parse_round1_batch_results(
