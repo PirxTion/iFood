@@ -1,5 +1,5 @@
 from typing import Callable
-from src.eval.metrics import ndcg_at_k, mrr, precision_at_k, ncvr_at_k, penalized_ndcg_at_k
+from src.eval.metrics import ndcg_at_k, mrr, precision_at_k, ncvr_at_k, penalized_ndcg_at_k, recall_at_k, f1_at_k
 
 
 def evaluate_retriever(
@@ -30,6 +30,7 @@ def evaluate_retriever(
 
         # Build lookup: item_id -> {relevance, violation}
         gt_lookup = {item["item_id"]: item for item in gt_items}
+        total_relevant = sum(1 for item in gt_items if item.get("relevance", 0) > 0)
 
         # Get retriever results
         retrieved_ids = retriever(query_text, k)
@@ -42,6 +43,8 @@ def evaluate_retriever(
             f"ndcg@{k}": ndcg_at_k(relevances, k),
             "mrr": mrr(relevances),
             f"precision@{k}": precision_at_k(relevances, k),
+            f"recall@{k}": recall_at_k(relevances, k, total_relevant),
+            f"f1@{k}": f1_at_k(relevances, k, total_relevant),
         }
 
         if category == "negative":
