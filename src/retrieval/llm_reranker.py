@@ -4,10 +4,10 @@ import os
 import re
 from abc import ABC, abstractmethod
 
-from huggingface_hub import InferenceClient
 from openai import OpenAI
+from sentence_transformers.cross_encoder import CrossEncoder
 
-from src.config import PROXY_URL, PROXY_KEY, LLM_MODEL, RERANK_TOP_N, FINAL_TOP_K, HF_TOKEN, HF_RERANKER_MODEL
+from src.config import PROXY_URL, PROXY_KEY, LLM_MODEL, RERANK_TOP_N, FINAL_TOP_K, CROSS_ENCODER_MODEL
 
 
 class Reranker(ABC):
@@ -83,30 +83,16 @@ def parse_rerank_response(response: str) -> list[str]:
     return []
 
 
-class HFReranker(Reranker):
-    """Cross-encoder reranker using HuggingFace Inference API.
+class CrossEncoderReranker(Reranker):
+    """Cross-encoder reranker using sentence-transformers CrossEncoder (local inference).
 
-    Scores each (query, candidate) pair with BAAI/bge-reranker-v2-m3
-    and returns candidates sorted by relevance score.
+    Scores all (query, candidate) pairs in a single batch and returns
+    candidates sorted by relevance score.
     """
 
-    def __init__(self, items: list[dict], model: str = HF_RERANKER_MODEL):
+    def __init__(self, items: list[dict], model: str = CROSS_ENCODER_MODEL):
         super().__init__(items)
-        self.model = model
-        self.client = InferenceClient(
-            provider="hf-inference",
-            api_key=HF_TOKEN or os.environ.get("HF_TOKEN", ""),
-        )
-
-    def _score(self, query: str, doc: str) -> float:
-        """Score a single query-document pair. Returns relevance probability."""
-        result = self.client.text_classification(
-            {"text": query, "text_pair": doc},
-            model=self.model,
-        )
-        label_scores = {r.label: r.score for r in result}
-        # bge-reranker uses LABEL_1 as the positive (relevant) class
-        return label_scores.get("LABEL_1", max(r.score for r in result))
+        self.model = CrossEncoder(model)
 
     def rerank(
         self,
@@ -115,20 +101,15 @@ class HFReranker(Reranker):
         top_k: int = FINAL_TOP_K,
     ) -> list[str]:
         """Re-rank candidates by cross-encoder relevance score."""
-        scored = []
-        for cid in candidate_ids:
-            if cid not in self.item_lookup:
-                continue
-            doc = self._item_text(self.item_lookup[cid])
-            try:
-                score = self._score(query, doc)
-            except Exception as e:
-                print(f"HF reranker error for {cid}: {e}")
-                score = 0.0
-            scored.append((cid, score))
+        valid_ids = [cid for cid in candidate_ids if cid in self.item_lookup]
+        if not valid_ids:
+            return []
 
-        scored.sort(key=lambda x: x[1], reverse=True)
-        return [cid for cid, _ in scored[:top_k]]
+        pairs = [(query, self._item_text(self.item_lookup[cid])) for cid in valid_ids]
+        scores = self.model.predict(pairs)
+
+        ranked = sorted(zip(valid_ids, scores), key=lambda x: x[1], reverse=True)
+        return [cid for cid, _ in ranked[:top_k]]
 
 
 class LLMReranker(Reranker):

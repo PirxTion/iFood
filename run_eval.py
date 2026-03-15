@@ -136,10 +136,10 @@ def main():
             from src.retrieval.bm25_retriever import BM25Retriever
             from src.retrieval.dense_retriever import DenseRetriever
             from src.retrieval.hybrid_retriever import reciprocal_rank_fusion
-            from src.retrieval.llm_reranker import HFReranker
+            from src.retrieval.llm_reranker import CrossEncoderReranker
             bm25 = BM25Retriever(items)
             dense = DenseRetriever(items)
-            reranker = HFReranker(items)
+            reranker = CrossEncoderReranker(items)
 
             def hf_pipeline(query_text, top_k):
                 cat = _query_category(queries, query_text)

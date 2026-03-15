@@ -5,7 +5,7 @@ from src.data_loader import load_items
 from src.retrieval.bm25_retriever import BM25Retriever
 from src.retrieval.dense_retriever import DenseRetriever
 from src.retrieval.hybrid_retriever import HybridRetriever
-from src.retrieval.llm_reranker import LLMReranker, HFReranker
+from src.retrieval.llm_reranker import LLMReranker, CrossEncoderReranker
 
 
 def main():
@@ -36,7 +36,7 @@ def main():
     if args.mode == "full":
         reranker = LLMReranker(items)
     elif args.mode == "hf":
-        reranker = HFReranker(items)
+        reranker = CrossEncoderReranker(items)
 
     def search(query_text: str) -> list[str]:
         if args.mode == "bm25":

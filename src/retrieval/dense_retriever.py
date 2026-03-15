@@ -43,9 +43,8 @@ class DenseRetriever:
             self._st_model = SentenceTransformer(model)
         else:
             from openai import OpenAI
-            from src.config import PROXY_URL, PROXY_KEY
-            key = PROXY_KEY or os.environ.get("PROXY_KEY", "")
-            self._openai_client = OpenAI(api_key=key, base_url=PROXY_URL)
+            key = os.environ.get("OPENAI_API_KEY", "")
+            self._openai_client = OpenAI(api_key=key)
 
         texts = [item["text"] for item in items]
         self.item_embeddings = self._embed_batch(texts, batch_size)
