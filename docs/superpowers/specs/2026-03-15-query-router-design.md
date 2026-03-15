@@ -14,7 +14,7 @@ Add a `QueryRouter` component that classifies each incoming search query into on
 |-------|-----------|---------|-------------------|
 | R1 | Keyword | "Pizza", "Sushi" | BM25 only |
 | R2 | Semantic | "Jantar romântico com massa" | Dense only |
-| R3 | Negative | "Macarrão sem frutos do mar" | Dense(main_term) − BM25(negated_term) |
+| R3 | Negative | "Macarrão sem frutos do mar" | Dense(main_term) − BM25(negated_term) → CrossEncoder rerank |
 
 ---
 
@@ -88,15 +88,16 @@ QueryRouter.classify(query_text)
     │                                          ──► results
     ├── R2 → dense.search(query_text, top_k)
     │                                          ──► results
-    └── R3 → dense.search(main_term, DENSE_TOP_K)   → dense_candidates
-             bm25.search(negated_term, BM25_TOP_K)  → negation_set
+    └── R3 → dense.search(main_term, DENSE_TOP_K)        → dense_candidates
+             bm25.search(negated_term, BM25_TOP_K)       → negation_set
              [id for id in dense_candidates
-              if id not in set(negation_set)][:top_k] ──► results
+              if id not in set(negation_set)]            → filtered_candidates
+             reranker.rerank(query_text, filtered, top_k) ──► results
 ```
 
-**R3 detail:** `main_term` (e.g. `"Macarrão"`) — not the full query — is passed to the dense retriever so the embedding is not confused by the negation clause. The BM25 negation search finds items that explicitly mention the negated ingredient; these are hard-excluded from the dense candidates. No reranker is applied in the initial implementation.
+**R3 detail:** `main_term` (e.g. `"Macarrão"`) — not the full query — is passed to the dense retriever so the embedding is not confused by the negation clause. The BM25 negation search finds items that explicitly mention the negated ingredient; these are hard-excluded from the dense candidates. The full `query_text` (including the negation clause) is then passed to the cross-encoder reranker, so it can use the complete user intent to score the surviving candidates. The reranker receives all filtered candidates with no additional size cap (the negation filter has already reduced the set).
 
-**R3 empty-result fallback:** If the negation filter produces fewer than `top_k` results (e.g. the negated term is very common), return the truncated list as-is — do not error or fall back to unfiltered results. Log a warning with the query, negated term, and result count so the behaviour is visible in evaluation runs.
+**R3 empty-result fallback:** If the negation filter produces fewer than `top_k` results, the reranker still runs over the smaller set and returns whatever is available — do not error. If the filtered set is empty, return an empty list. Log a warning with the query, negated term, and filtered count so the behaviour is visible in evaluation runs.
 
 ---
 
@@ -106,7 +107,7 @@ QueryRouter.classify(query_text)
 |-------|----------------|
 | R1 | `router` → `bm25` |
 | R2 | `router` → `dense` |
-| R3 | `router` → `dense_main` → `bm25_negation` → `negation_filter` |
+| R3 | `router` → `dense_main` → `bm25_negation` → `negation_filter` → `ce_rerank` |
 
 The `router` stage records no `output_ids` (classification only). Route decision and extracted terms are stored in a `metadata` dict on the stage trace. This requires adding `metadata: dict = field(default_factory=dict)` to `StageTrace` in `src/eval/tracing.py`. The `StageTimer` context manager must also expose a `metadata` attribute so callers can write to it before `__exit__` appends the `StageTrace`.
 
@@ -132,6 +133,5 @@ with collector.stage("router") as st:
 
 ## Out of Scope
 
-- Reranking after R3 (deferred — try without first)
 - Caching router results across eval runs
 - Confidence scores or fallback routing
