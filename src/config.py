@@ -3,10 +3,11 @@ import os
 PROXY_URL = "https://oovault.nl/api/proxy/v1"
 PROXY_KEY = os.environ.get("PROXY_KEY", "")
 
-CROSS_ENCODER_MODEL = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
+CROSS_ENCODER_MODEL = "BAAI/bge-reranker-v2-m3"
 
 EMBEDDING_MODEL = "text-embedding-3-large"
 LLM_MODEL = "gpt-5-mini"
+ROUTER_MODEL = "gpt-4o-mini"
 
 DATA_DIR = "data"
 EVAL_DIR = "eval_data"
