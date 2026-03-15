@@ -52,3 +52,24 @@ def test_query_trace_serializes_to_json():
     assert json.dumps(d)  # must be JSON-serializable
     assert d["query"] == "pizza"
     assert d["stages"][0]["name"] == "bm25"
+
+
+def test_stage_timer_forwards_metadata():
+    qt = QueryTrace(query="pizza", category="keyword")
+    with StageTimer("router", qt) as st:
+        st.metadata = {"route": "R1", "main_term": None}
+    assert qt.stages[0].metadata == {"route": "R1", "main_term": None}
+
+
+def test_stage_trace_default_metadata_is_empty_dict():
+    st = StageTrace(name="test")
+    assert st.metadata == {}
+
+
+def test_query_trace_serializes_metadata_to_json():
+    import json
+    qt = QueryTrace(query="pizza", category="keyword")
+    qt.stages.append(StageTrace(name="router", time_ms=5.0, output_ids=[], metadata={"route": "R2"}))
+    d = qt.to_dict()
+    assert json.dumps(d)  # must be JSON-serializable
+    assert d["stages"][0]["metadata"] == {"route": "R2"}

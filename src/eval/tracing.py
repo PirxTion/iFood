@@ -9,6 +9,7 @@ class StageTrace:
     name: str
     time_ms: float = 0.0
     output_ids: list[str] = field(default_factory=list)
+    metadata: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -37,6 +38,7 @@ class StageTimer:
         self.name = name
         self.query_trace = query_trace
         self.output_ids: list[str] = []
+        self.metadata: dict = {}
         self._start: float = 0.0
 
     def __enter__(self):
@@ -46,7 +48,7 @@ class StageTimer:
     def __exit__(self, *exc):
         elapsed_ms = (time.perf_counter() - self._start) * 1000
         self.query_trace.stages.append(
-            StageTrace(name=self.name, time_ms=elapsed_ms, output_ids=self.output_ids)
+            StageTrace(name=self.name, time_ms=elapsed_ms, output_ids=self.output_ids, metadata=self.metadata)
         )
         return False
 
