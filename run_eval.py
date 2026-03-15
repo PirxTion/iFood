@@ -199,6 +199,7 @@ def main():
                 cat = _query_category(queries, query_text)
                 collector.begin_query(query_text, cat)
                 t0 = time.perf_counter()
+                results: list[str] = []
 
                 with collector.stage("router") as st:
                     route_result = router.classify(query_text)
