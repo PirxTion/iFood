@@ -18,11 +18,14 @@ def test_format_items_for_prompt():
          "description": "Salmão", "taxonomy": {"l0": "A", "l1": "B", "l2": "C"},
          "price": 45.0},
     ]
-    text = format_items_for_prompt(items)
-    assert "abc123" in text
+    text, idx_to_id = format_items_for_prompt(items)
     assert "Pizza" in text
-    assert "def456" in text
     assert "Sushi" in text
+    # Uses integer indices, not UUIDs
+    assert "[0]" in text
+    assert "[1]" in text
+    assert idx_to_id["0"] == "abc123"
+    assert idx_to_id["1"] == "def456"
 
 
 def test_parse_round1_response_json_list():

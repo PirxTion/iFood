@@ -16,7 +16,10 @@ def test_dense_retriever_search_returns_ids():
     retriever = DenseRetriever.__new__(DenseRetriever)
     retriever.item_ids = item_ids
     retriever.item_embeddings = item_embeddings
-    retriever.client = None  # won't be used
+    # Pre-compute normalised embeddings (same as __init__ does)
+    norms = np.linalg.norm(item_embeddings, axis=1, keepdims=True)
+    norms[norms == 0] = 1
+    retriever._normed = (item_embeddings / norms).astype(np.float32)
 
     # Query embedding similar to item a
     query_embedding = np.array([0.95, 0.05, 0.0, 0.0])
@@ -39,11 +42,13 @@ def test_dense_retriever_cosine_similarity():
     retriever = DenseRetriever.__new__(DenseRetriever)
     retriever.item_ids = item_ids
     retriever.item_embeddings = item_embeddings
-    retriever.client = None
+    norms = np.linalg.norm(item_embeddings, axis=1, keepdims=True)
+    norms[norms == 0] = 1
+    retriever._normed = (item_embeddings / norms).astype(np.float32)
 
     query_embedding = np.array([1.0, 0.0])
     with patch.object(retriever, '_embed_query', return_value=query_embedding):
-        results = retriever.search("test", top_k=2)
+        results = retriever.search("test", top_k=1)
 
     # With cosine similarity, direction matters not magnitude
     assert results[0] == "a"
