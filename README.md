@@ -6,7 +6,7 @@ A semantic search system for iFood's food delivery catalog that processes Portug
 
 The system uses a **query-aware routed pipeline** that classifies each query and dispatches it to the optimal retrieval strategy:
 
-![System Architecture](docs/figures/architecture.png)
+![System Architecture](docs/figures/architecture.svg)
 
 **Routes:**
 
@@ -33,8 +33,8 @@ The system uses a **query-aware routed pipeline** that classifies each query and
 ### Installation
 
 ```bash
-git clone <repo-url>
-cd prosus-assignment
+git clone git@github.com:PirxTion/iFood.git
+cd iFood
 uv sync
 ```
 
@@ -46,8 +46,6 @@ The system uses two API endpoints:
 # OpenAI API — used for query routing, ground truth generation, training data generation
 export OPENAI_API_KEY="your-openai-key"
 
-# Proxy API — used for LLM reranker (optional, only for `full` eval mode)
-export PROXY_KEY="your-proxy-key"
 ```
 
 ### Data
@@ -64,14 +62,14 @@ data/
 ### Interactive Search
 
 ```bash
-# Dense retrieval (default embedding model)
-uv run python run_search.py --mode dense "Almoço estilo havaiano"
+# Routed pipeline (default) — auto-classifies query type
+uv run python run_search.py "Almoço estilo havaiano"
 
-# BM25 retrieval
-uv run python run_search.py --mode bm25 "Pizza"
+# Single-query with explicit mode
+uv run python run_search.py --mode dense "Pizza"
 
 # Interactive mode
-uv run python run_search.py --mode dense
+uv run python run_search.py
 ```
 
 ### Evaluation Pipeline
@@ -151,12 +149,12 @@ NCVR and Penalized NDCG are custom metrics designed for this task — standard I
 
 ### Final System (Routed Pipeline, EmbeddingGemma-300m with prompt templates)
 
-| Category | NDCG@10 | MRR | P@10 | Penalized NDCG |
-|----------|---------|-----|------|----------------|
-| **Overall** | **0.650** | 0.766 | 0.564 | — |
-| Keyword | 0.799 | 0.925 | 0.745 | — |
-| Semantic | 0.540 | 0.715 | 0.384 | — |
-| Negative | 0.604 | 0.691 | 0.532 | 0.539 |
+| Category | NDCG@10 | MRR | P@10 | R@10 | Penalized NDCG | NCVR |
+|----------|---------|-----|------|------|----------------|------|
+| **Overall** | **0.669** | 0.774 | 0.572 | 0.324 | — | 0.059 |
+| Keyword | 0.849 | 0.958 | 0.785 | 0.352 | — | — |
+| Semantic | 0.540 | 0.697 | 0.389 | 0.230 | — | — |
+| Negative | 0.607 | 0.658 | 0.532 | 0.388 | 0.543 | 0.179 |
 
 ### Pipeline Comparison
 
