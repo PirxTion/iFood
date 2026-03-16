@@ -5,8 +5,9 @@ PROXY_KEY = os.environ.get("PROXY_KEY", "")
 
 CROSS_ENCODER_MODEL = "BAAI/bge-reranker-v2-m3"
 
-EMBEDDING_MODEL = "text-embedding-3-large"
-LLM_MODEL = "gpt-5-mini"
+EMBEDDING_MODEL = "google/embeddinggemma-300m"
+EMBEDDING_DIM = None  # None = model default
+LLM_MODEL = "gpt-4o-mini"
 ROUTER_MODEL = "gpt-4o-mini"
 
 DATA_DIR = "data"
@@ -19,6 +20,7 @@ QUERIES_CSV = f"{DATA_DIR}/queries.csv"
 # Retrieval hyperparams
 BM25_TOP_K = 50
 DENSE_TOP_K = 50
+NEGATION_DENSE_TOP_K = 200  # Semantic exclusion top-K for R3 negation filtering
 RRF_K = 60
 RERANK_TOP_N = 20
 FINAL_TOP_K = 10

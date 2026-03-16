@@ -11,7 +11,7 @@ from src.eval.evaluate import evaluate_retriever
 from src.eval.tracing import QueryTraceCollector
 from src.eval.run_report import build_run_report, save_run_report
 from src.config import (
-    EVAL_DIR, BM25_TOP_K, DENSE_TOP_K, RRF_K, RERANK_TOP_N,
+    EVAL_DIR, BM25_TOP_K, DENSE_TOP_K, NEGATION_DENSE_TOP_K, RRF_K, RERANK_TOP_N,
     FINAL_TOP_K, EMBEDDING_MODEL, LLM_MODEL, CROSS_ENCODER_MODEL, ROUTER_MODEL,
 )
 
@@ -188,12 +188,22 @@ def main():
         elif args.evaluate == "routed":
             from src.retrieval.bm25_retriever import BM25Retriever
             from src.retrieval.dense_retriever import DenseRetriever
-            from src.retrieval.llm_reranker import CrossEncoderReranker
             from src.retrieval.query_router import QueryRouter
             bm25 = BM25Retriever(items)
             dense = DenseRetriever(items)
-            reranker = CrossEncoderReranker(items)
             router = QueryRouter()
+
+            # Pre-build text lookup for R3 negation filtering.
+            # Includes name/category/description/taxonomy (item["text"]) + tag values.
+            def _item_searchable_text(item: dict) -> str:
+                tag_vals = " ".join(
+                    v for tag in item["tags"] for v in tag.get("value", []) if isinstance(v, str)
+                )
+                return (item["text"] + " " + tag_vals).lower()
+
+            item_texts: dict[str, str] = {
+                item["item_id"]: _item_searchable_text(item) for item in items
+            }
 
             def routed_pipeline(query_text, top_k):
                 cat = _query_category(queries, query_text)
@@ -228,13 +238,16 @@ def main():
                         dense_candidates = dense.search(main_term, top_k=DENSE_TOP_K)
                         st.output_ids = dense_candidates
 
-                    with collector.stage("bm25_negation") as st:
-                        negation_ids = bm25.search(negated_term, top_k=BM25_TOP_K) if negated_term else []
-                        st.output_ids = negation_ids
-
-                    negation_set = set(negation_ids)
                     with collector.stage("negation_filter") as st:
-                        filtered = [i for i in dense_candidates if i not in negation_set]
+                        if negated_term:
+                            # Split compound negations: "peixe e frutos do mar" → ["peixe", "frutos do mar"]
+                            neg_parts = [p.strip().lower() for p in negated_term.split(" e ") if p.strip()]
+                            filtered = [
+                                iid for iid in dense_candidates
+                                if not any(part in item_texts[iid] for part in neg_parts)
+                            ]
+                        else:
+                            filtered = dense_candidates
                         st.output_ids = filtered
                         if len(filtered) < top_k:
                             warnings.warn(
@@ -243,9 +256,7 @@ def main():
                                 f"filtered count={len(filtered)} < top_k={top_k}"
                             )
 
-                    with collector.stage("ce_rerank") as st:
-                        results = reranker.rerank(query_text, filtered, top_k=top_k)
-                        st.output_ids = results
+                    results = filtered[:top_k]
 
                 collector.finalize_query(results, (time.perf_counter() - t0) * 1000)
                 return results
@@ -266,7 +277,6 @@ def main():
             "full": LLM_MODEL,
             "hf": CROSS_ENCODER_MODEL,
             "dense_rerank": CROSS_ENCODER_MODEL,
-            "routed": CROSS_ENCODER_MODEL,
         }.get(args.evaluate)
         config_snapshot = {
             "BM25_TOP_K": BM25_TOP_K, "DENSE_TOP_K": DENSE_TOP_K,
