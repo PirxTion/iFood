@@ -188,9 +188,11 @@ def main():
         elif args.evaluate == "routed":
             from src.retrieval.bm25_retriever import BM25Retriever
             from src.retrieval.dense_retriever import DenseRetriever
+            from src.retrieval.llm_reranker import CrossEncoderReranker
             from src.retrieval.query_router import QueryRouter
             bm25 = BM25Retriever(items)
             dense = DenseRetriever(items)
+            reranker = CrossEncoderReranker(items)
             router = QueryRouter()
 
             # Pre-build text lookup for R3 negation filtering.
@@ -221,12 +223,15 @@ def main():
 
                 if route_result.route == "R1":
                     with collector.stage("bm25") as st:
-                        results = bm25.search(query_text, top_k)
+                        bm25_results = bm25.search(query_text, top_k=RERANK_TOP_N)
+                        st.output_ids = bm25_results
+                    with collector.stage("ce_rerank") as st:
+                        results = reranker.rerank(query_text, bm25_results, top_k=top_k)
                         st.output_ids = results
 
                 elif route_result.route == "R2":
                     with collector.stage("dense") as st:
-                        results = dense.search(query_text, top_k)
+                        results = dense.search(query_text, top_k=top_k)
                         st.output_ids = results
 
                 else:  # R3
@@ -277,6 +282,7 @@ def main():
             "full": LLM_MODEL,
             "hf": CROSS_ENCODER_MODEL,
             "dense_rerank": CROSS_ENCODER_MODEL,
+            "routed": CROSS_ENCODER_MODEL,
         }.get(args.evaluate)
         config_snapshot = {
             "BM25_TOP_K": BM25_TOP_K, "DENSE_TOP_K": DENSE_TOP_K,
