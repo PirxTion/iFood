@@ -12,6 +12,7 @@ from tqdm import tqdm
 from src.config import (
     PROXY_URL,
     PROXY_KEY,
+    OPENAI_API_KEY,
     LLM_MODEL,
     EVAL_DIR,
     GT_BATCH_SIZE,
@@ -22,8 +23,7 @@ from src.config import (
 
 
 def get_client() -> OpenAI:
-    key = PROXY_KEY or os.environ.get("OPENAI_API_KEY", "")
-    print(key)
+    key = PROXY_KEY or OPENAI_API_KEY
     return OpenAI(api_key=key)
 
 

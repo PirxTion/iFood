@@ -27,6 +27,8 @@ def main():
     parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--lr", type=float, default=2e-5)
+    parser.add_argument("--freeze-backbone", action="store_true",
+                        help="Freeze transformer, only train projection heads")
     args = parser.parse_args()
 
     from datasets import Dataset
@@ -57,6 +59,14 @@ def main():
     # 4. Load model
     model = SentenceTransformer(args.base_model)
     print(f"Model prompts: {list(model.prompts.keys())}")
+
+    # Optionally freeze transformer backbone, only train Dense projection heads
+    if args.freeze_backbone:
+        for param in model[0].parameters():
+            param.requires_grad = False
+        trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        total = sum(p.numel() for p in model.parameters())
+        print(f"Frozen backbone: training {trainable:,} / {total:,} params ({100*trainable/total:.1f}%)")
 
     # 5. Loss
     loss = losses.MultipleNegativesRankingLoss(model)

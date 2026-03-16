@@ -95,8 +95,8 @@ Each evaluation run produces:
 # 1. Generate synthetic training data via OpenAI Batch API (~8K-10K pairs)
 uv run python scripts/generate_training_data.py
 
-# 2. Fine-tune EmbeddingGemma-300m
-uv run python scripts/train_embedding.py --epochs 3 --batch-size 64
+# 2. Fine-tune EmbeddingGemma-300m (frozen backbone, projection heads only)
+uv run python scripts/train_embedding.py --freeze-backbone --epochs 3 --lr 1e-4 --batch-size 64
 
 # 3. Evaluate fine-tuned model (update EMBEDDING_MODEL in src/config.py first)
 uv run python run_eval.py --evaluate routed --k 10
@@ -147,14 +147,14 @@ NCVR and Penalized NDCG are custom metrics designed for this task — standard I
 
 ## Results
 
-### Final System (Routed Pipeline, EmbeddingGemma-300m with prompt templates)
+### Final System (Routed Pipeline, Fine-tuned EmbeddingGemma-300m)
 
 | Category | NDCG@10 | MRR | P@10 | R@10 | Penalized NDCG | NCVR |
 |----------|---------|-----|------|------|----------------|------|
-| **Overall** | **0.669** | 0.774 | 0.572 | 0.324 | — | 0.059 |
-| Keyword | 0.849 | 0.958 | 0.785 | 0.352 | — | — |
-| Semantic | 0.540 | 0.697 | 0.389 | 0.230 | — | — |
-| Negative | 0.607 | 0.658 | 0.532 | 0.388 | 0.543 | 0.179 |
+| **Overall** | **0.681** | 0.779 | 0.588 | 0.326 | — | 0.059 |
+| Keyword | 0.844 | 0.950 | 0.780 | 0.339 | — | — |
+| Semantic | 0.554 | 0.671 | 0.416 | 0.248 | — | — |
+| Negative | 0.637 | 0.708 | 0.558 | 0.392 | 0.577 | 0.179 |
 
 ### Pipeline Comparison
 
@@ -187,17 +187,27 @@ Notable: EmbeddingGemma with prompt templates (0.602) matches te3-large@768d (0.
 **Base model:** `google/embeddinggemma-300m` (300M params, 768d, 100+ languages)
 
 **Training data generation:**
-- GPT-4o-mini generates two query types per item via the OpenAI Batch API:
+- GPT-5-mini generates two query types per item via the OpenAI Batch API:
   - **Semantic-gap queries** — conceptual/cultural/occasion-based, e.g., item "Poke Tropical" → query "almoço estilo havaiano"
   - **Direct queries** — different vocabulary than item name, e.g., "tigela de peixe cru com arroz"
-- ~8,000-10,000 (query, item) pairs total
+- 10k (query, item) pairs total
 
 **Training:**
 - Loss: `MultipleNegativesRankingLoss` — each batch of N pairs produces N positives and N*(N-1) in-batch negatives
 - Prompt-aware training: query and document columns are mapped to EmbeddingGemma's built-in prompt templates
-- 3 epochs, batch size 64, learning rate 2e-5, early stopping on validation loss
+- **Frozen backbone** — only the two Dense projection layers (768→3072→768, ~4.7M params) are trained; the transformer backbone is frozen to prevent catastrophic forgetting
+- 3 epochs, batch size 64, learning rate 1e-4
 
-**Goal:** Close the semantic gap where the model doesn't know cultural associations (e.g., "havaiano" → poke bowls, "mezze" → hummus/falafel).
+**Results:**
+
+| Category | Base Model | Fine-tuned (projection only) | Change |
+|----------|-----------|---------------------------|--------|
+| Semantic | 0.540 | **0.554** | **+2.6%** |
+| Keyword | 0.851 | 0.844 | -0.8% |
+| Negative | 0.607 | **0.637** | **+4.9%** |
+| **Overall** | **0.669** | **0.681** | **+1.8%** |
+
+Full fine-tuning (all parameters, lr=2e-5, 3 epochs) caused catastrophic forgetting and degraded performance to 0.639 overall. Freezing the backbone and training only the projection heads preserved the model's general knowledge while adapting the embedding space to our domain.
 
 ## Project Structure
 

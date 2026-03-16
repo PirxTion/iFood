@@ -2,10 +2,11 @@ import os
 
 PROXY_URL = "https://oovault.nl/api/proxy/v1"
 PROXY_KEY = os.environ.get("PROXY_KEY", "")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 
 CROSS_ENCODER_MODEL = "BAAI/bge-reranker-v2-m3"
 
-EMBEDDING_MODEL = "google/embeddinggemma-300m"
+EMBEDDING_MODEL = "models/embeddinggemma-finetuned-2"
 EMBEDDING_DIM = None  # None = model default
 LLM_MODEL = "gpt-4o-mini"
 ROUTER_MODEL = "gpt-4o-mini"

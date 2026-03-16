@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from openai import OpenAI
 
-from src.config import ROUTER_MODEL
+from src.config import ROUTER_MODEL, OPENAI_API_KEY
 
 _SYSTEM_PROMPT = """\
 You are a query classifier for a Portuguese food delivery search system (iFood, Brazil).
@@ -38,7 +38,7 @@ class RouteResult:
 
 class QueryRouter:
     def __init__(self):
-        self._client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
+        self._client = OpenAI(api_key=OPENAI_API_KEY)
 
     def classify(self, query: str) -> RouteResult:
         """Classify a query into R1, R2, or R3 and extract terms for R3.
